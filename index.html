@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Critique — AI code reviewer</title>
+  <meta name="description" content="Paste code or a unified diff and get a structured AI code review: correctness, security, performance, and readability findings with severity, line references, and concrete fixes. Bring your own Anthropic or OpenAI key." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23111'/%3E%3Ctext x='50' y='70' font-size='60' text-anchor='middle' fill='%23fff' font-family='monospace'%3E%2F%2F%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">//</span>
+        <span class="brand-name">Critique</span>
+        <span class="brand-sub">AI code reviewer</span>
+      </div>
+      <button id="settingsBtn" class="btn btn-ghost" type="button" aria-haspopup="dialog">
+        <span class="dot" id="keyDot" aria-hidden="true"></span>
+        API key
+      </button>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    <section class="intro">
+      <h1>Review code or a diff in seconds.</h1>
+      <p>Paste a snippet, a full file, or a unified diff. Critique returns findings grouped by
+        <strong>Correctness</strong>, <strong>Security</strong>, <strong>Performance</strong>, and
+        <strong>Readability</strong> — each with a severity, the relevant lines, and a concrete fix.
+        Your API key stays in your browser and is sent only to the provider.</p>
+    </section>
+
+    <form id="reviewForm" class="panel" autocomplete="off">
+      <div class="controls">
+        <div class="field">
+          <label for="inputMode">Input</label>
+          <select id="inputMode" name="inputMode">
+            <option value="code">Code</option>
+            <option value="diff">Unified diff</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="language">Language</label>
+          <select id="language" name="language">
+            <option value="">Auto-detect</option>
+            <option>JavaScript</option>
+            <option>TypeScript</option>
+            <option>Python</option>
+            <option>Java</option>
+            <option>Go</option>
+            <option>Rust</option>
+            <option>C</option>
+            <option>C++</option>
+            <option>C#</option>
+            <option>Ruby</option>
+            <option>PHP</option>
+            <option>Swift</option>
+            <option>Kotlin</option>
+            <option>SQL</option>
+            <option>Shell</option>
+            <option>HTML/CSS</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field field-grow">
+          <label for="prUrl">GitHub PR URL <span class="muted">(optional — fetches the diff)</span></label>
+          <div class="pr-row">
+            <input id="prUrl" name="prUrl" type="url" inputmode="url"
+              placeholder="https://github.com/owner/repo/pull/123" />
+            <button id="fetchPrBtn" class="btn btn-ghost" type="button">Fetch diff</button>
+          </div>
+        </div>
+      </div>
+
+      <label class="sr-only" for="codeInput">Code or diff to review</label>
+      <textarea id="codeInput" name="codeInput" spellcheck="false"
+        placeholder="Paste code or a unified diff here…"></textarea>
+
+      <div class="form-footer">
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <div class="actions">
+          <button id="sampleBtn" class="btn btn-ghost" type="button">Load sample</button>
+          <button id="clearBtn" class="btn btn-ghost" type="button">Clear</button>
+          <button id="reviewBtn" class="btn btn-primary" type="submit">Review code</button>
+        </div>
+      </div>
+    </form>
+
+    <section id="results" class="results" aria-live="polite"></section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p>Critique runs entirely in your browser. No server, no logging — your code and key never leave the page except in the direct call to your chosen LLM provider.</p>
+    </div>
+  </footer>
+
+  <!-- Settings dialog -->
+  <dialog id="settingsDialog" class="dialog" aria-label="API key settings">
+    <form method="dialog" class="dialog-inner" id="settingsForm">
+      <h2>API key</h2>
+      <p class="muted">Stored in your browser's <code>localStorage</code> and sent directly to the provider. Never uploaded anywhere else.</p>
+
+      <div class="field">
+        <label for="provider">Provider</label>
+        <select id="provider">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="model">Model</label>
+        <select id="model"></select>
+      </div>
+
+      <div class="field">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" placeholder="sk-…" autocomplete="off" />
+      </div>
+
+      <p id="settingsHint" class="hint"></p>
+
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" value="cancel" type="submit" formnovalidate>Cancel</button>
+        <button class="btn btn-danger" id="forgetKeyBtn" value="forget" type="submit" formnovalidate>Forget key</button>
+        <button class="btn btn-primary" value="save" id="saveKeyBtn" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="findingTemplate">
+    <details class="finding">
+      <summary>
+        <span class="sev-badge"></span>
+        <span class="finding-title"></span>
+        <span class="finding-lines"></span>
+      </summary>
+      <div class="finding-body">
+        <p class="finding-detail"></p>
+        <div class="finding-suggestion">
+          <h4>Suggestion</h4>
+          <p class="suggestion-text"></p>
+          <pre class="suggestion-code"><code></code></pre>
+        </div>
+      </div>
+    </details>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
