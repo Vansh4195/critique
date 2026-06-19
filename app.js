@@ -33,6 +33,20 @@
       keyHint:
         'Get a key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>.',
     },
+    gemini: {
+      label: "Gemini (free)",
+      // Google's OpenAI-compatible endpoint — same chat/completions request
+      // shape as OpenAI, so it reuses the OpenAI call path below.
+      openaiCompatible: true,
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      models: [
+        { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (free tier)" },
+        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+      ],
+      keyHint:
+        'Free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a>. Uses Google\'s OpenAI-compatible API and works directly in the browser. It is also the reliable free path for the Node test harness (<code>node tests/e2e.mjs</code>).',
+    },
   };
 
   const CATEGORIES = [
@@ -297,8 +311,13 @@
     return textBlock.text;
   }
 
-  async function callOpenAI(code, mode, language) {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  // Handles any OpenAI-compatible chat/completions endpoint. The default is
+  // OpenAI itself; Gemini reuses this path by supplying its own base URL.
+  async function callOpenAICompatible(code, mode, language) {
+    const cfg = PROVIDERS[settings.provider];
+    const baseUrl = cfg.baseUrl || "https://api.openai.com/v1";
+    const providerLabel = cfg.label || "Provider";
+    const res = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -321,7 +340,7 @@
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       const msg = data?.error?.message || `HTTP ${res.status}`;
-      throw new Error(`OpenAI API error: ${msg}`);
+      throw new Error(`${providerLabel} API error: ${msg}`);
     }
     const choice = data.choices && data.choices[0];
     if (choice?.finish_reason === "content_filter") {
@@ -477,7 +496,7 @@
       const text =
         settings.provider === "anthropic"
           ? await callAnthropic(code, mode, language)
-          : await callOpenAI(code, mode, language);
+          : await callOpenAICompatible(code, mode, language);
       const review = parseReview(text);
       renderResults(review);
       setStatus("Review complete.");
